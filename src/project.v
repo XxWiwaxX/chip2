@@ -83,10 +83,10 @@ module tt_um_wscore (
                 end
 
                 EXEC: begin
-                    case (ir[15:12]) // Opcode
-                        OP_ADD:  regs[ir[9:7]] <= regs[ir[6:4]] + regs[ir[2:0]];
-                        OP_ADDI: regs[ir[9:7]] <= regs[ir[6:4]] + ir[3:0]; // 4-bit imm
-                        OP_MUL:  regs[ir[9:7]] <= mul_out[7:0]; // 8-bit result
+                    case (ir[15:12])
+                        OP_ADD:  if (ir[9:7] != 0) regs[ir[9:7]] <= regs[ir[6:4]] + regs[ir[2:0]];
+                        OP_ADDI: if (ir[9:7] != 0) regs[ir[9:7]] <= regs[ir[6:4]] + ir[3:0];
+                        OP_MUL:  if (ir[9:7] != 0) regs[ir[9:7]] <= mul_out[7:0];
                         
                         OP_BEQ: begin
                             if (regs[ir[9:7]] == regs[ir[6:4]]) pc <= pc + ir[3:0];
@@ -110,7 +110,7 @@ module tt_um_wscore (
                 end
 
                 MEM: begin
-                    if (ir[15:12] == OP_LW)
+                    if (ir[15:12] == OP_LW && ir[9:7] != 0)
                         regs[ir[9:7]] <= ram[regs[ir[6:4]][4:0]];
                     else if (ir[15:12] == OP_SW)
                         ram[regs[ir[6:4]][4:0]] <= regs[ir[9:7]];
