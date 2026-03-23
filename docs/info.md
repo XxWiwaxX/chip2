@@ -9,39 +9,43 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## How it works
 
-This project is a custom **8-bit RISC-V Lite CPU** designed for the IHP26a process. It features a multi-cycle architecture with a focused instruction set that prioritizes math and control flow.
+This project is a custom **8-bit RISC-V-inspired CPU** optimized for high-density synthesis on the IHP26a process (TinyTapeout 1x2 tile). It utilizes a multi-cycle Finite State Machine (FSM) to handle fetching, decoding, and execution.
 
 ### Architecture Features:
-* **Register File:** 8 general-purpose 8-bit registers (with `x0` hardwired to zero).
-* **Memory:** 32 bytes of internal SRAM-style storage (implemented as a register array).
-* **ALU & Multiplier:** Includes a dedicated 8-bit $\times$ 8-bit hardware multiplier for fast arithmetic.
-* **Control Unit:** A Finite State Machine (FSM) manages the cycle: `Fetch` -> `Decode` -> `Execute` -> `Memory Access`.
+* **Registers:** 8 general-purpose 8-bit registers ($r_0$ to $r_7$). $r_0$ is hardwired to zero at the logic level to save area and ensure ISA compatibility.
+* **RAM:** 24 bytes of internal storage, implemented as a flip-flop array for high-speed access.
+* **Hardware Multiplier:** A dedicated 8-bit combinational multiplier allows for single-cycle multiplication during the `EXECUTE` phase.
+* **Safety:** Includes bounds-checking to prevent out-of-range memory writes to the 24-byte RAM.
 
-### Instruction Set:
-The CPU uses 16-bit wide instructions (stored in little-endian format) that resemble the RISC-V compressed format:
-* **Arithmetic:** `ADD`, `ADDI`, `SUB`.
-* **Math:** `MUL` (Custom hardware-level 8-bit multiplication).
-* **Control Flow:** `BEQ` (Branch if Equal) and `BNE` (Branch if Not Equal) for loops and logic.
-* **Memory:** `LW` (Load Word) and `SW` (Store Word).
+### Instruction Set (16-bit):
+Instructions are stored in **Little-Endian** format. The bit-fields are organized as follows:
+`[Opcode: 4 bits] [Unused: 2 bits] [rd: 3 bits] [rs1: 3 bits] [imm/rs2: 4 bits]`
 
-### The External Bus:
-The design exposes its internal state in real-time. The `uio` pins act as an address bus (showing the Program Counter), while the `uo` pins act as a data monitor, reflecting the contents of the destination register (`rd`) for every instruction.
+| Opcode | Mnemonic | Description |
+|--------|----------|-------------|
+| 0000   | ADD      | rd = rs1 + rs2 |
+| 0001   | ADDI     | rd = rs1 + imm (4-bit) |
+| 0010   | MUL      | rd = rs1 * rs2 (8-bit result) |
+| 0011   | LW       | rd = RAM[rs1] |
+| 0100   | SW       | RAM[rs1] = rd |
+| 0101   | BEQ      | If rd == rs1, PC = PC + imm |
+| 0110   | BNE      | If rd != rs1, PC = PC + imm |
 
 ## How to test
 
-The CPU starts in a **LOAD mode** to allow you to program the internal 32-byte RAM before execution begins.
+The CPU features a built-in bootloader mode. Follow these steps to load and run a program:
 
-1. **Reset:** Pull `rst_n` low to reset the Program Counter and enter `LOAD` mode.
-2. **Program the CPU:** * Ensure `uio[7]` (Mode Select) is held **LOW**.
-   * Set the target RAM address on `uio[4:0]`.
+1. **Reset:** Pull `rst_n` LOW. This resets the Program Counter (PC) to 0 and enters `LOAD` mode.
+2. **Program Loading:**
+   * Keep `uio[7]` (Mode Select) **LOW**.
+   * Set the target RAM address (0-23) on `uio[4:0]`.
    * Set the instruction/data byte on `ui[7:0]`.
-   * Pulse the clock (`clk`) to write the byte.
-   * Repeat for all bytes of your program.
-3. **Run:** Set `uio[7]` to **HIGH**. The CPU will transition to the `FETCH` state and begin executing from address `0x00`.
-4. **Monitor:** Watch the `uo[7:0]` pins. They will display the result of calculations as they are written to the registers.
+   * Toggle the clock (`clk`) to write the byte to RAM.
+3. **Execution:** Set `uio[7]` to **HIGH**. The CPU will exit the `LOAD` state and begin fetching instructions from RAM address 0.
+4. **Monitoring:** * `uo[7:0]` continuously outputs the value of the destination register (`rd`) of the current instruction.
+   * `uio[4:0]` outputs the current Program Counter (PC) for debugging.
 
 ## External hardware
 
-* **Logic Analyzer:** Highly recommended to monitor the address bus (`uio[4:0]`) and the data output (`uo[7:0]`).
-* **Input Switch Bank:** A set of 8 switches for `ui` and a way to toggle `uio[7]` is necessary for manual "bit-banging" of the initial program.
-* **Clock Source:** A standard 10MHz square wave (or slower for manual debugging).
+* **Logic Analyzer/LEDs:** Connect to `uo[7:0]` to verify calculation results.
+* **Clock Source:** 10MHz recommended for IHP26a, though it can run at much lower speeds for manual step-through debugging.
